@@ -81,4 +81,5 @@ booktitle = {European Conference on Computer Vision},
 
 ## Acknowledgements
 
-The codebase is mainly built on the repo of https://github.com/sgvaze/generalized-category-discovery.-->
+The codebase is mainly built on the repo of https://github.com/sgvaze/generalized-category-discovery. 
+-->
