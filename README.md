@@ -1,4 +1,4 @@
-# Learn to Categorize or Categorize to Learn? Self-Coding for Generalized Category Discovery
+# SelEx: Self-Expertise in Fine-Grained Generalized Category Discovery
 <!--
 
 <p align="center">
@@ -16,7 +16,7 @@
   <a href="https://www.ceessnoek.info/">Cees Snoek</a>.
 </p>
 
-<!-- ![image](assets/selex.png)-->
+<!-- ![image](assets/selex.png)
 
 
 
@@ -44,7 +44,7 @@ We also use generic object recognition datasets, including:
 * [CIFAR-10/100](https://pytorch.org/vision/stable/datasets.html) and [ImageNet](https://image-net.org/download.php)
 
 
-<!--## Scripts
+## Scripts
 
 **Train representation**:
 
