@@ -49,21 +49,9 @@ We also use generic object recognition datasets, including:
 **Train representation**:
 
 ```
-bash bash_scripts/contrastive_train.sh
+python contrastive_training.py
 ```
 
-**Extract features**: Extract features to prepare for semi-supervised k-means. 
-It will require changing the path for the model with which to extract features in ```warmup_model_dir```
-
-```
-bash bash_scripts/extract_features.sh
-```
-
-**Fit semi-supervised k-means**:
-
-```
-bash bash_scripts/k_means.sh
-```
 
 
 ## <a name="cite"/> :clipboard: Citation
