@@ -16,7 +16,7 @@
   <a href="https://www.ceessnoek.info/">Cees Snoek</a>.
 </p>
 
-<!--![image](assets/selex.png)-->
+![image](assets/selex.png)
 
 
 
