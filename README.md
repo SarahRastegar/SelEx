@@ -1,11 +1,11 @@
 # SelEx: Self-Expertise in Fine-Grained Generalized Category Discovery
-<!--
+
 
 <p align="center">
-    <a href="https://openreview.net/forum?id=m0vfXMrLwF&noteId=m0vfXMrLwF"><img src="https://img.shields.io/badge/-ECCV%2024-blue"></a>
-    <a href="https://arxiv.org/abs/2310.19776"><img src="https://img.shields.io/badge/arXiv-2310.19776-red"></a>
+    <a href="https://www.arxiv.org/abs/2408.14371"><img src="https://img.shields.io/badge/-ECCV%2024-blue"></a>
+    <a href="https://www.arxiv.org/abs/2408.14371"><img src="https://img.shields.io/badge/arXiv-2408.14371-red"></a>
 </p>
--->
+
 <p align="center">
 	SelEx: Self-Expertise in Fine-Grained Generalized Category Discovery (ECCV 2024)<br>
   By
@@ -16,7 +16,7 @@
   <a href="https://www.ceessnoek.info/">Cees Snoek</a>.
 </p>
 
-<!-- ![image](assets/selex.png)
+![image](assets/selex.png)
 
 
 
@@ -70,4 +70,4 @@ booktitle = {European Conference on Computer Vision},
 ## Acknowledgements
 
 The codebase is mainly built on the repo of https://github.com/sgvaze/generalized-category-discovery. 
--->
+
