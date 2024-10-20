@@ -59,10 +59,13 @@ We also use generic object recognition datasets, including:
 ## Scripts
 
 **Train representation**:
+To run the code with the hyperparameters used in the paper, execute the following command:
 
 ```
 python contrastive_training.py
 ```
+This script will automatically train the representations, extract features, and fit the semi-supervised KMeans algorithm. It also provides final evaluations on both the best checkpoint and the final checkpoint.
+
 
 
 
