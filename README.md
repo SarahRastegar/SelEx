@@ -27,6 +27,18 @@
 pip install -r requirements.txt
 ```
 
+### kmeans_pytorch Installation
+Since our work relies heavily on [kmeans_pytorch](https://github.com/subhadarship/kmeans_pytorch) for cluster assignments, you need to ensure that it is correctly imported to reproduce the results from the paper. You can install `kmeans_pytorch` directly in the directory by executing the following commands:
+
+```
+cd SelEx
+git clone https://github.com/subhadarship/kmeans_pytorch
+cd kmeans_pytorch
+pip install --editable .
+```
+
+**Note:** While using `scikit-learn`'s KMeans provides improvements, the results in the paper have been reported using `kmeans_pytorch`.
+
 ## Config
 
 Set paths to datasets, pre-trained models and desired log directories in ```config.py```
