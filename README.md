@@ -66,6 +66,7 @@ python contrastive_training.py
 ```
 This script will automatically train the representations, extract features, and fit the semi-supervised KMeans algorithm. It also provides final evaluations on both the best checkpoint and the final checkpoint.
 
+**Dataset Hyperparameter Specifics**: If you're working with the CUB dataset, set the unsupervised_smoothing parameter to 1.0, for other fine-grained datasets (Scars, Pets, Aircraft) to 0.5 and for generic datasets to 0.1.
 
 ## Evaluation
 In the `Final Reports` section at the end, please note that only the evaluations reported for:
