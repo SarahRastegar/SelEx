@@ -67,7 +67,13 @@ python contrastive_training.py
 This script will automatically train the representations, extract features, and fit the semi-supervised KMeans algorithm. It also provides final evaluations on both the best checkpoint and the final checkpoint.
 
 
-
+## Evaluation
+In the `Final Reports` section at the end, please note that only the evaluations reported for:
+```
+Reports for the best checkpoint:
+Reports for the last checkpoint:
+```
+are the evaluations performed at test time to evaluate the checkpoints. Additionally, please note that `Train ACC Unlabelled_v2` is the metric reported by our work and prior studies.
 
 ## <a name="cite"/> :clipboard: Citation
 
