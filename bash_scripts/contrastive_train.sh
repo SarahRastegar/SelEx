@@ -15,7 +15,7 @@ echo $EXP_NUM
 ${PYTHON} -m methods.contrastive_training.contrastive_training \
             --dataset_name 'cifar10' \
             --batch_size 128 \
-            --grad_from_block 11 \
+            --grad_from_block 10 \
             --epochs 200 \
             --base_model vit_dino \
             --num_workers 4 \
