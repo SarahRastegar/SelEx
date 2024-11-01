@@ -93,3 +93,6 @@ booktitle = {European Conference on Computer Vision},
 
 The codebase is mainly built on the repo of https://github.com/sgvaze/generalized-category-discovery. 
 
+## Further Resources
+If you found our code helpful and are interested in exploring more, also check out our **NeurIPS 2023** paper *Learn to Categorize or Categorize to Learn? Self-Coding for Generalized Category Discovery* <a href="https://arxiv.org/abs/2310.19776"><img src="https://img.shields.io/badge/arXiv-2310.19776-red"></a> <a href="https://github.com/SarahRastegar/InfoSieve"><img src="https://img.shields.io/badge/GitHub-InfoSieve-green"></a>.
+
