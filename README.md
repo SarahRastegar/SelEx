@@ -68,6 +68,7 @@ This script will automatically train the representations, extract features, and 
 
 **Dataset Hyperparameter Specifics**: If you're working with the CUB and Scars dataset, set the unsupervised_smoothing parameter to 1.0, for Pets and Aircraft to 0.5, and for generic datasets to 0.1. 
 For Scars also add `--grad_from_block 9`. 
+Please note that for Herbarium_19, `--unbalanced 1` should be added, because it is long-tailed. 
 
 ## Evaluation
 In the `Final Reports` section at the end, please note that only the evaluations reported for:
