@@ -41,7 +41,7 @@ class FeatureVectorDataset(Dataset):
 
             # Load feature vector
             feat_path = os.path.join(self.feature_root, f'{label}', f'{uq_idx}.npy')
-            feature_vector = torch.load(feat_path)
+            feature_vector = torch.load(feat_path, weights_only=False)  # numpy array (torch>=2.6 defaults to weights_only=True)
 
             if self.target_transform is not None:
                 label = self.target_transform(label)
@@ -55,7 +55,7 @@ class FeatureVectorDataset(Dataset):
 
             # Load feature vector
             feat_path = os.path.join(self.feature_root, f'{label}', f'{uq_idx}.npy')
-            feature_vector = torch.load(feat_path)
+            feature_vector = torch.load(feat_path, weights_only=False)  # numpy array (torch>=2.6 defaults to weights_only=True)
 
             if self.target_transform is not None:
                 label = self.target_transform(label)
