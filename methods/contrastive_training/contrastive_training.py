@@ -1,9 +1,10 @@
-import sys
-sys.path.append('../../../SelEx/')
-dino_v1 = True
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))  # repo root
+from config import dino_v1
 
 import argparse
 import os
+import subprocess
 
 from torch.utils.data import DataLoader
 import numpy as np
@@ -27,7 +28,7 @@ from tqdm import tqdm
 from torch.nn import functional as F
 
 from project_utils.cluster_and_log_utils import log_accs_from_preds
-from config import exp_root, dino_pretrain_path, dino_pretrain_path2
+from config import exp_root, dino_pretrain_path, dino_pretrain_path2, dataset_configs
 from matplotlib import pyplot as plt
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
 
@@ -296,7 +297,7 @@ def train( projection_head, model, train_loader, test_loader, unlabelled_train_l
                 n_labeled = args.num_labeled_classes
                 n_unlabeled = args.num_unlabeled_classes
 
-                for i in range(len(preds_ind_list)):
+                for i in range(min(len(preds_ind_list), 1 + epoch // 10)):   # level i enters the loss at epoch 10*i
                     cluster_labels=(preds_ind_list[i][np.argsort(uq_index)[uq_idxs]]).clone()
                     cluster_indexer = F.one_hot(cluster_labels.long(), n_labeled +n_unlabeled ).float().T
                     n_labeled = max(int(n_labeled / 2), 1)
@@ -344,7 +345,7 @@ def train( projection_head, model, train_loader, test_loader, unlabelled_train_l
                 con_feats = features
             confusion_factor = (confusion_factor - confusion_factor.min()) / (
                         confusion_factor.max() - confusion_factor.min() + 0.0000001)
-            confusion_factor = confusion_factor / confusion_factor.sum(dim=1)
+            confusion_factor = confusion_factor / confusion_factor.sum(dim=1).clamp_min(1e-12)   # an all-zero row (NaN radii after an empty cluster) gave 0/0
             torch.cuda.empty_cache()
 
             torch.cuda.empty_cache()
@@ -359,7 +360,7 @@ def train( projection_head, model, train_loader, test_loader, unlabelled_train_l
             sup_con_labels = class_labels[mask_lab]
             sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels)
             dimension=semisup_con_feats.shape[-1]
-            for i in range(len(preds_ind_list)):
+            for i in range(min(len(preds_ind_list), 1 + epoch // 10)):   # level i enters the loss at epoch 10*i
                 sup_con_loss += sup_con_crit(semisup_con_feats[:, :, :int(dimension/2**(i+1))],
                                              labels=preds_ind_list[i][np.argsort(uq_index)[uq_idxs]]) / 2**(i+1)
 
@@ -499,6 +500,14 @@ def plot_acc(x, old, new, all, name):
     plt.savefig("Plots/Accuracy_"+name+".png")
 
 
+def to_loader_order(labels, l_mask):
+    """fit_mix(u_feats, l_feats, ...) returns labels ordered as [l_feats; u_feats]: put them back in loader order."""
+    order = np.concatenate([np.where(l_mask)[0], np.where(~l_mask)[0]])
+    out = torch.empty_like(labels)
+    out[torch.from_numpy(order).to(labels.device)] = labels
+    return out
+
+
 def extract_labeled_protos(model, train_loader, args):
     model.eval()
 
@@ -546,7 +555,7 @@ def extract_labeled_protos(model, train_loader, args):
                                               x in (l_feats, u_feats, l_targets, u_targets))
 
     kmeanssem.fit_mix(u_feats, l_feats, l_targets)
-    all_preds = kmeanssem.labels_
+    all_preds = to_loader_order(kmeanssem.labels_, mask)
     mask_cls=mask_cls[~mask]
     preds = all_preds.cpu().numpy()[~mask]
     all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets.cpu().numpy(), y_pred=preds, mask=mask_cls,
@@ -568,26 +577,32 @@ def extract_labeled_protos(model, train_loader, args):
     u_feats = all_feats[~mask_known]
     l_feats, u_feats= (torch.from_numpy(x).to(device) for  x in (l_feats, u_feats))
 
+    # Coarse levels (joint, non-nested): level i groups ALL level-0 prototypes, known and novel together, by k-means into
+    # n_labeled + n_novel groups (100/50/24/12/6/2 on CUB); every image takes the group of its level-0 cluster. Prototypes = mean
+    # of the member features (mean of the grouped level-0 prototypes for an empty group). No size re-balancing above level 0.
+    feats_t = torch.from_numpy(all_feats).to(device).float()
+    prev_labels, prev_protos = all_preds.to(device).long(), prototypes.to(device).float().clone()
+    prev_nl, prev_nn = n_labeled, n_novel
+    bad = ~torch.isfinite(prev_protos).all(dim=1)   # empty level-0 cluster: k-means centre is NaN and no image carries its label;
+    for lo, hi in ((0, prev_nl), (prev_nl, prev_nl + prev_nn)):   # give it its side's mean prototype so it can still be grouped
+        ok = ~bad[lo:hi]
+        if (~ok).any():
+            prev_protos[lo:hi][~ok] = prev_protos[lo:hi][ok].mean(0) if ok.any() else 0.
     while n_labeled>1:
         n_labeled=max(int(n_labeled/2),1)
         n_novel=max(int(n_novel/2),1)
-
-        kmeans_l = KMeans(n_clusters=n_labeled, random_state=0).fit(label_proto)
-        preds_labels = torch.from_numpy(kmeans_l.labels_).to(device)
-        level_l_targets=preds_labels[all_preds[mask_known]]
-        if args.unbalanced:
-            cluster_size = None
-        else:
-            cluster_size = math.ceil( n_samples / (n_labeled+n_novel))
-        kmeans_higher =SemiSupKMeans(k=n_labeled+n_novel, tolerance=1e-4,
-                              max_iterations=10, init='k-means++',
-                              n_init=1, random_state=None, n_jobs=None, pairwise_batch_size=1024,
-                              mode=None, protos=None,cluster_size=cluster_size)
-        kmeans_higher.fit_mix(u_feats, l_feats, level_l_targets)
-        preds_level = kmeans_higher.labels_
-        prototypes_level = kmeans_higher.cluster_centers_
+        parent = torch.from_numpy(KMeans(n_clusters=n_labeled + n_novel, random_state=0).fit(
+            prev_protos[:prev_nl + prev_nn].cpu().numpy()).labels_).to(device).long()
+        preds_level = parent[prev_labels]
+        k = n_labeled + n_novel
+        cnt = torch.bincount(preds_level, minlength=k).float()
+        sums = torch.zeros(k, feats_t.shape[1], device=device).index_add_(0, preds_level, feats_t)
+        child = torch.zeros(k, prev_protos.shape[1], device=device).index_add_(0, parent, prev_protos[:prev_nl + prev_nn])
+        child = child / torch.bincount(parent, minlength=k).clamp_min(1)[:, None].float()
+        prototypes_level = torch.where(cnt[:, None] > 0, sums / cnt.clamp_min(1)[:, None], child)
         prototype_higher.append(prototypes_level.clone())
-        preds_higher.append(preds_level.to(device).clone())
+        preds_higher.append(preds_level.clone())
+        # prev_* stay at level 0, so every level groups the level-0 prototypes directly (levels are not nested)
 
     return ids,all_preds, prototype_higher,preds_higher, metrics
 def test_kmeans(model, test_loader, epoch,
@@ -619,7 +634,7 @@ def test_kmeans(model, test_loader, epoch,
 
     if Use_GPU:
         preds, prototypes = kmeans(X=torch.from_numpy(all_feats).to(device), num_clusters=args.num_unlabeled_classes+args.num_labeled_classes,
-                                       distance='euclidean', device=device, tqdm_flag=False)
+                                       distance='euclidean', device=device, tqdm_flag=False, iter_limit=1000)
 
         preds, prototypes = preds.cpu().numpy(), prototypes.cpu().numpy()
     else:
@@ -653,19 +668,19 @@ if __name__ == "__main__":
     parser.add_argument('--prop_train_labels', type=float, default=0.5)
     parser.add_argument('--use_ssb_splits', type=str2bool, default=True)
 
-    parser.add_argument('--grad_from_block', type=int, default=10)
+    parser.add_argument('--grad_from_block', type=int, default=None, help='default: per dataset, see config.py')
     parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--save_best_thresh', type=float, default=None)
     parser.add_argument('--gamma', type=float, default=0.1)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
-    parser.add_argument('--epochs', default=200, type=int)
+    parser.add_argument('--epochs', default=None, type=int, help='default: per dataset, see config.py')
     parser.add_argument('--exp_root', type=str, default=exp_root)
     parser.add_argument('--transform', type=str, default='imagenet')
     parser.add_argument('--seed', default=1, type=int)
 
     parser.add_argument('--base_model', type=str, default='vit_dino')
-    parser.add_argument('--temperature', type=float, default=1.0)
+    parser.add_argument('--temperature', type=float, default=None, help='default: per dataset, see config.py')
     parser.add_argument('--sup_con_weight', type=float, default=0.35)
     parser.add_argument('--n_views', default=2, type=int)
     parser.add_argument('--contrast_unlabel_only', type=str2bool, default=False)
@@ -673,7 +688,7 @@ if __name__ == "__main__":
     parser.add_argument('--strategy', type=str, default='zero_one')
     parser.add_argument('--cluster_momentum', type=float, default=1)
 
-    parser.add_argument('--unsupervised_smoothing', type=float, default=1)
+    parser.add_argument('--unsupervised_smoothing', type=float, default=None, help='default: per dataset, see config.py')
     parser.add_argument('--distance', type=str, default='euclidean',
                         help='options: euclidean, cosine')
 
@@ -681,7 +696,7 @@ if __name__ == "__main__":
     parser.add_argument('--prototype_extraction_interval', default=1, type=int)
 
     parser.add_argument('--gpu_clustering', type=str2bool, default=True)
-    parser.add_argument('--unbalanced', type=str2bool, default=False)
+    parser.add_argument('--unbalanced', type=str2bool, default=None, help='default: per dataset, see config.py')
 
     parser.add_argument('--gpu_id', default=0, type=int)
     parser.add_argument('--report', type=str2bool, default=True)
@@ -692,6 +707,9 @@ if __name__ == "__main__":
     # INIT
     # ----------------------
     args = parser.parse_args()
+    for k, v in dataset_configs[args.dataset_name].items():   # per-dataset settings (config.py) unless given on the command line
+        if getattr(args, k) is None:
+            setattr(args, k, v)
     device = torch.device('cuda:0')
     args = get_class_splits(args)
     np.random.seed(args.seed)
@@ -715,12 +733,7 @@ if __name__ == "__main__":
             model = vits.__dict__['vit_base']()
             torch.cuda.empty_cache()
 
-            state_dict = torch.load(pretrain_path, map_location='cpu')['teacher']
-            dict_keys=list(state_dict.keys())
-            for key in dict_keys:
-                newkey= key.replace("backbone.",'')
-                state_dict[newkey]=state_dict[key]
-                del state_dict[key]
+            state_dict = torch.load(pretrain_path, map_location='cpu')   # official DINO ViT-B/16 backbone, loaded as in SimGCD
             model.load_state_dict(state_dict)
         else:
             pretrain_path = dino_pretrain_path2
@@ -815,17 +828,18 @@ if __name__ == "__main__":
     train(projection_head, model, train_loader, test_loader_labelled, test_loader_unlabelled, merge_train_loader, args)
     torch.cuda.empty_cache()
     if args.report:
-        print("Reports for the best checkpoint:")
-        os.system("CUDA_VISIBLE_DEVICES="+str(args.gpu_id)+" python ../clustering/extract_features.py --dataset "+args.dataset_name+
-                  " --warmup_model_dir "+ args.model_path.replace('(','\(').replace(')','\)').replace('|','\|'))
-        os.system("CUDA_VISIBLE_DEVICES="+str(args.gpu_id)+" python ../clustering/k_means.py --dataset "+args.dataset_name+
-                  " --unbalanced "+str(int(args.unbalanced)))
-        print("Reports for the last checkpoint:")
-        os.system("CUDA_VISIBLE_DEVICES="+str(args.gpu_id)+" python ../clustering/extract_features.py --dataset "+args.dataset_name+
-                  " --warmup_model_dir "+ args.model_path.replace('(','\(').replace(')','\)').replace('|','\|')+
-                  "  --use_best_model 0")
-        os.system("CUDA_VISIBLE_DEVICES="+str(args.gpu_id)+" python ../clustering/k_means.py --dataset "+args.dataset_name+
-                  " --unbalanced "+str(int(args.unbalanced)))
+        # Same interpreter, GPU (inherited CUDA_VISIBLE_DEVICES) and data split as training; features go to this run's log dir
+        clustering_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'clustering')
+        feature_dir = os.path.join(args.log_dir, 'features')
+        for name, use_best in (('best', 1), ('last', 0)):
+            print(f"Reports for the {name} checkpoint:", flush=True)
+            subprocess.run([sys.executable, os.path.join(clustering_dir, 'extract_features.py'), '--dataset', args.dataset_name,
+                            '--warmup_model_dir', args.model_path, '--use_best_model', str(use_best),
+                            '--root_dir', feature_dir], check=True)
+            subprocess.run([sys.executable, os.path.join(clustering_dir, 'k_means.py'), '--dataset_name', args.dataset_name,
+                            '--unbalanced', str(args.unbalanced), '--root_dir', feature_dir,
+                            '--prop_train_labels', str(args.prop_train_labels), '--use_ssb_splits', str(args.use_ssb_splits),
+                            '--eval_funcs', *args.eval_funcs], check=True)
 
     torch.cuda.empty_cache()
     print(args.model_path)

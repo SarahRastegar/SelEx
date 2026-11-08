@@ -1,5 +1,5 @@
-import sys
-sys.path.append('../../../SelEx/')
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))  # repo root
 
 import argparse
 import os
@@ -20,7 +20,7 @@ from project_utils.cluster_utils import cluster_acc, np, linear_assignment
 
 device = torch.device('cuda')
 from tqdm import tqdm
-from config import feature_extract_dir
+from config import feature_extract_dir, dataset_configs
 
 # TODO: Debug
 import warnings
@@ -128,13 +128,15 @@ if __name__ == "__main__":
     parser.add_argument('--use_ssb_splits', type=str2bool, default=True)
 
     parser.add_argument('--silent', type=str2bool, default=True)
-    parser.add_argument('--unbalanced', type=str2bool, default=False)
+    parser.add_argument('--unbalanced', type=str2bool, default=None, help='default: per dataset, see config.py')
 
 
     # ----------------------
     # INIT
     # ----------------------
     args = parser.parse_args()
+    if args.unbalanced is None:
+        args.unbalanced = dataset_configs[args.dataset_name]['unbalanced']
     cluster_accs = {}
     seed_torch(0)
     args.save_dir = os.path.join(args.root_dir, f'{args.model_name}_{args.dataset_name}')

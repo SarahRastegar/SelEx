@@ -1,6 +1,6 @@
-import sys
-sys.path.append('../../../SelEx/')
-dino_v1 =True
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))  # repo root
+from config import dino_v1
 import torch
 from torch.utils.data import DataLoader
 
@@ -165,15 +165,10 @@ if __name__ == "__main__":
         args.num_unlabeled_classes = len(args.unlabeled_classes)
 
         if dino_v1:
-            model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16', pretrained=False)
+            model = vits.__dict__['vit_base']()   # same ViT-B/16 as torch.hub's dino_vitb16, without needing GitHub
 
             pretrain_path = dino_pretrain_path
-            state_dict = torch.load(pretrain_path, map_location='cpu')['teacher']
-            dict_keys=list(state_dict.keys())
-            for key in dict_keys:
-                newkey= key.replace("backbone.",'')
-                state_dict[newkey]=state_dict[key]
-                del state_dict[key]
+            state_dict = torch.load(pretrain_path, map_location='cpu')   # official DINO ViT-B/16 backbone, loaded as in SimGCD
             model.load_state_dict(state_dict)
         else:
             pretrain_path = dino_pretrain_path2

@@ -1,98 +1,46 @@
 import os
+import pandas as pd
 import numpy as np
 from copy import deepcopy
 from scipy import io as mat_io
 
-from torchvision.datasets import StanfordCars
 from torchvision.datasets.folder import default_loader
 from torch.utils.data import Dataset
 
-from config import car_root
-
 from data.data_utils import subsample_instances
-
-import scipy.io,csv
-
-meta_default_path = car_root.rstrip('/') + '.mat'
-csv_default_path = car_root.rstrip('/') + '.csv'
-
-class CustomSCar(StanfordCars):
-
-    def __init__(self, *args, **kwargs):
-
-        super(CustomSCar, self).__init__(*args, **kwargs)
-
-        self.uq_idxs = np.array(range(len(self)))
-
-    def __getitem__(self, item):
-
-        img, label = super().__getitem__(item)
-        uq_idx = self.uq_idxs[item]
-
-        return img, label, uq_idx
-
-    def __len__(self):
-        return len(self.targets)
-
+from config import car_root
 
 class CarsDataset(Dataset):
     """
         Cars Dataset
     """
-    def __init__(self, train=True, data_dir=car_root, transform=None, metas=meta_default_path, csvs=csv_default_path):
-        metas=metas.format('annos')
+    def __init__(self, train=True, limit=0, data_dir=car_root, transform=None):
+
+        metas = os.path.join(data_dir, 'devkit/cars_train_annos.mat') if train else os.path.join(data_dir, 'devkit/cars_test_annos_withlabels.mat')
+        data_dir = os.path.join(data_dir, 'cars_train/') if train else os.path.join(data_dir, 'cars_test/')
+
         self.loader = default_loader
         self.data_dir = data_dir
         self.data = []
         self.target = []
         self.train = train
+
         self.transform = transform
 
-        csvreader_train = csv.reader(open(csvs.format('train')))
-        csvreader_test = csv.reader(open(csvs.format('test')))
-
-        rows_train = []
-        for row in csvreader_train:
-            rows_train.append(row)
-            rows_train
-
-        rows_test = []
-        for row in csvreader_test:
-            rows_test.append(row)
-        cnt = 0
-        ind_change = {}
-        for i in range(1, len(rows_train)):
-            cnt += 1
-            ind_change[rows_train[i][1] + '$' + rows_train[i][2] + '$' + rows_train[i][3] + '$' + rows_train[i][4]] = \
-                rows_train[i][-1]
-        cnt = 0
-
-        for i in range(1, len(rows_test)):
-            cnt += 1
-            ind_change[rows_test[i][1] + '$' + rows_test[i][2] + '$' + rows_test[i][3] + '$' + rows_test[i][4]] = \
-                rows_test[i][-1]
-
-        #if not isinstance(metas, str):
-        #    raise Exception("Train metas must be string location !")
+        if not isinstance(metas, str):
+            raise Exception("Train metas must be string location !")
         labels_meta = mat_io.loadmat(metas)
-        cnt = 0
 
         for idx, img_ in enumerate(labels_meta['annotations'][0]):
+            if limit:
+                if idx > limit:
+                    break
 
-            if img_[-1] == 0:
-                cnt+=1
-            im_code = str(img_[1][0][0])+"$"+str(img_[2][0][0])+"$"+str(img_[3][0][0])+"$"+str(img_[4][0][0])
+            # self.data.append(img_resized)
+            self.data.append(data_dir + img_[5][0])
+            # if self.mode == 'train':
+            self.target.append(img_[4][0][0])
 
-            if train:
-                if img_[-1]==0:
-                    address = data_dir.format('train')+ind_change[im_code]
-                    self.data.append(address)
-                    self.target.append(img_[5][0][0])
-            else:
-                if img_[-1]==1:
-                    address = data_dir.format('test')+ind_change[im_code]
-                    self.data.append(address)
-                    self.target.append(img_[5][0][0])
         self.uq_idxs = np.array(range(len(self)))
         self.target_transform = None
 
@@ -139,7 +87,6 @@ def subsample_classes(dataset, include_classes=range(160)):
 
     return dataset
 
-
 def get_train_val_indices(train_dataset, val_split=0.2):
 
     train_classes = np.unique(train_dataset.target)
@@ -164,8 +111,10 @@ def get_scars_datasets(train_transform, test_transform, train_classes=range(160)
                     split_train_val=False, seed=0):
 
     np.random.seed(seed)
+
     # Init entire training set
-    whole_training_set = CarsDataset(data_dir=car_root, transform=train_transform, metas=meta_default_path, csvs=csv_default_path, train=True)
+    whole_training_set = CarsDataset(data_dir=car_root, transform=train_transform, train=True)
+
     # Get labelled training set which has subsampled classes, then subsample some indices from that
     train_dataset_labelled = subsample_classes(deepcopy(whole_training_set), include_classes=train_classes)
     subsample_indices = subsample_instances(train_dataset_labelled, prop_indices_to_subsample=prop_train_labels)
@@ -182,7 +131,7 @@ def get_scars_datasets(train_transform, test_transform, train_classes=range(160)
     train_dataset_unlabelled = subsample_dataset(deepcopy(whole_training_set), np.array(list(unlabelled_indices)))
 
     # Get test set for all classes
-    test_dataset = CarsDataset(data_dir=car_root, transform=test_transform, metas=meta_default_path, csvs=csv_default_path, train=False)
+    test_dataset = CarsDataset(data_dir=car_root, transform=test_transform, train=False)
 
     # Either split train into train and val or use test set as val
     train_dataset_labelled = train_dataset_labelled_split if split_train_val else train_dataset_labelled
@@ -196,7 +145,6 @@ def get_scars_datasets(train_transform, test_transform, train_classes=range(160)
     }
 
     return all_datasets
-
 
 if __name__ == '__main__':
 

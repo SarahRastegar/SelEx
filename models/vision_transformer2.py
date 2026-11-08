@@ -20,7 +20,10 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
-from xformers.ops import SwiGLU
+try:
+    from xformers.ops import SwiGLU
+except ImportError:  # xformers is optional: SwiGLU is only used by ffn_layer='swiglufused', not by ViT-B
+    SwiGLU = nn.Module
 import os, warnings
 #from layers import  NestedTensorBlock as Block
 
